@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>צ'אנג מאי לקרן</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&family=Assistant:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: list panel on the right (RTL), full-height map beside it; on phones the map sits on top and the list scrolls below */
+:root {
+  --bg: #f6f7f2;
+  --panel: #ffffff;
+  --fg: #1f2a24;
+  --muted: #5d6b63;
+  --line: #dfe4dc;
+  --accent: #2f7a5b;
+  --star: #e0a100;
+  --danger: #b3261e;
+  --cat-cafe: #8a5a2b;
+  --cat-naturecafe: #4f8a3a;
+  --cat-food: #c2531f;
+  --cat-bar: #6a4bb0;
+  --cat-market: #c08a12;
+  --cat-nature: #1f7a74;
+  --display: "Suez One", "Times New Roman", serif;
+  --body: "Assistant", "Segoe UI", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a17; --panel: #1b231f; --fg: #e8eee9; --muted: #9db0a5; --line: #2c3832;
+    --accent: #6cc39b; --star: #f5c542; --danger: #f2817a;
+    --cat-cafe: #c99a66; --cat-naturecafe: #8cc777; --cat-food: #ee8a55; --cat-bar: #a993ec; --cat-market: #e6b445; --cat-nature: #5fc4bc;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a17; --panel: #1b231f; --fg: #e8eee9; --muted: #9db0a5; --line: #2c3832;
+  --accent: #6cc39b; --star: #f5c542; --danger: #f2817a;
+  --cat-cafe: #c99a66; --cat-naturecafe: #8cc777; --cat-food: #ee8a55; --cat-bar: #a993ec; --cat-market: #e6b445; --cat-nature: #5fc4bc;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; }
+button { font: inherit; color: inherit; }
+.app { display: grid; grid-template-columns: minmax(320px, 400px) 1fr; height: 100%; }
+aside { background: var(--panel); border-inline-end: 1px solid var(--line); overflow-y: auto; min-width: 0;
+  padding-block: 24px 32px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+#map { height: 100%; min-height: 300px; background: var(--bg); }
+header h1 { font-family: var(--display); font-weight: 400; font-size: 1.9rem; line-height: 1.1; margin: 0 0 6px; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); font-size: .95rem; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.btn { font-weight: 600; font-size: .9rem; border: 1px solid var(--accent); color: var(--accent); background: transparent;
+  border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.btn:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.btn.on { background: var(--accent); color: var(--panel); }
+.btn.quiet { border-color: var(--line); color: var(--muted); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn:focus-visible, .chip:focus-visible, .icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.editbar { margin-top: 12px; padding: 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: .88rem; color: var(--muted); line-height: 1.45; display: grid; gap: 10px; }
+.editbar .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 6px; }
+.chip { font-size: .88rem; font-weight: 600; border: 1px solid var(--line); background: transparent;
+  border-radius: 999px; padding: 5px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--panel); border-color: var(--fg); }
+.chip .s { color: var(--star); }
+.chip[aria-pressed="true"] .s { color: var(--star); }
+section.cat { margin-top: 22px; }
+section.cat h2 { font-size: .78rem; letter-spacing: .08em; color: var(--muted); font-weight: 700;
+  margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+section.cat h2 .dot { width: 10px; height: 10px; border-radius: 50%; }
+section.cat h2 .count { font-variant-numeric: tabular-nums; font-weight: 400; }
+.items { min-height: 8px; }
+.editing .items { min-height: 44px; border: 1px dashed transparent; border-radius: 10px; }
+.editing .items:empty { border-color: var(--line); }
+.editing .items:empty::after { content: "אפשר לגרור לכאן"; display: block; padding: 12px; color: var(--muted); font-size: .85rem; text-align: center; }
+.place { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; padding: 12px 10px; margin-inline: -10px; border-radius: 10px; cursor: pointer; }
+.place:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.place.active { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.editing .place { cursor: default; grid-template-columns: 22px 28px 1fr auto; border: 1px solid var(--line); margin: 0 0 8px; background: var(--panel); }
+.num { width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: .85rem; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+.place h3 { margin: 1px 0 3px; font-size: 1.05rem; font-weight: 700; }
+.place p { margin: 0 0 6px; color: var(--muted); line-height: 1.45; font-size: .95rem; white-space: pre-wrap; }
+.place a { color: var(--accent); font-weight: 600; font-size: .88rem; text-decoration: none; }
+.place a:hover { text-decoration: underline; }
+.body { min-width: 0; }
+.icon { background: none; border: 0; cursor: pointer; padding: 2px 4px; display: grid; place-items: center; align-self: start; min-width: 36px; min-height: 36px; font-size: 1.25rem; line-height: 1; color: var(--muted); border-radius: 6px; }
+.icon.star.on { color: var(--star); }
+.handle { cursor: grab; color: var(--muted); font-size: 1.1rem; line-height: 26px; text-align: center; touch-action: none; user-select: none; }
+.sortable-ghost { opacity: .35; }
+.sortable-chosen { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.field { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.field.name { font-weight: 700; font-size: 1rem; margin-bottom: 6px; }
+textarea.field { resize: vertical; min-height: 56px; line-height: 1.4; font-size: .95rem; }
+.field:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.actions select { font: inherit; font-size: .85rem; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; max-width: 100%; }
+.pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: grid; place-items: center;
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); position: relative; }
+.pin span { transform: rotate(45deg); color: #fff; font: 700 13px var(--body); }
+.pin.starred { border-color: #f5c542; border-width: 3px; }
+.pin.starred::after { content: "★"; position: absolute; top: -9px; right: -9px; transform: rotate(45deg); color: #f5c542; font-size: 15px; text-shadow: 0 0 2px #000; }
+.me-dot { width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(26,115,232,.35), 0 1px 4px rgba(0,0,0,.4); }
+.locate { width: 34px; height: 34px; display: grid; place-items: center; background: #fff; color: #333; cursor: pointer; border: 0; font-size: 18px; }
+.locate.on { color: #1a73e8; }
+.leaflet-popup-content { font-family: var(--body); direction: rtl; text-align: right; margin: 12px 14px; }
+.leaflet-popup-content b { font-size: 1rem; }
+.leaflet-popup-content a { color: #2f7a5b; font-weight: 600; }
+.toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 2000;
+  background: var(--fg); color: var(--panel); padding: 10px 16px; border-radius: 10px; display: flex; gap: 14px; align-items: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: .92rem; max-width: calc(100% - 32px); }
+.toast button { background: none; border: 0; color: var(--star); font-weight: 700; cursor: pointer; }
+.nojs { margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--star) 18%, transparent); font-size: .9rem; line-height: 1.45; }
+footer { margin-top: 28px; color: var(--muted); font-size: .8rem; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; }
+  /* phone: the map stays pinned at the top while the list scrolls under it */
+  #map { order: -1; height: 40vh; min-height: 240px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    border-bottom: 1px solid var(--line); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .app.editing-mode #map { position: relative; height: 30vh; min-height: 200px; }
+  .place { scroll-margin-top: calc(40vh + 12px); }
+  aside { border-inline-end: 0; overflow: visible; }
+  .field, .actions select, textarea.field { font-size: 16px; }
+  .icon { min-width: 44px; min-height: 44px; }
+  .editing .place { grid-template-columns: 32px 28px 1fr auto; }
+  .handle { font-size: 1.35rem; padding-block: 4px; }
+  .btn { padding: 8px 16px; }
+  .chip { padding: 7px 13px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1>צ'אנג מאי לקרן</h1>
+      <p>המלצות שאספתי בשבילך. לחיצה על מקום מראה אותו במפה, ולחיצה על תחום מסננת. אפשר לסמן כוכב על מקומות שבא לך.</p>
+      <div class="toolbar">
+        <button class="btn" id="editBtn" type="button">עריכת הרשימה</button>
+      </div>
+      <div class="editbar" id="editbar" hidden>
+        <div>גוררים בעזרת ⋮⋮ כדי לשנות סדר או להעביר תחום. המספרים מתעדכנים לבד לפי הסדר החדש. השינויים נשמרים אוטומטית בדפדפן הזה.</div>
+        <div class="row">
+          <button class="btn" id="exportBtn" type="button">שמירת עותק לשליחה</button>
+          <button class="btn quiet" id="resetBtn" type="button">חזרה לרשימה המקורית</button>
+        </div>
+      </div>
+    </header>
+    <div class="chips" id="chips" role="group" aria-label="סינון"></div>
+    <noscript><p class="nojs">המפה והעריכה לא נטענו בתצוגה הזו. כדי לראות את המפה, פותחים את הקובץ בדפדפן (Chrome או Safari). הרשימה וקישורי גוגל מפות למטה עובדים גם כך.</p></noscript>
+    <div id="list"><!--L--><section class="cat"><h2><span class="dot" style="background:#8a5a2b"></span>בתי קפה בעיר <span class="count">6</span></h2><div class="items"><div class="place"><div class="num" style="background:#8a5a2b">1</div><div class="body"><h3>Fern Forest Cafe</h3><p>קפה חביב בעיר העתיקה. ארוחות בוקר.</p><a href="https://maps.app.goo.gl/Z4nQ5zCY7gdY5S3y6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#8a5a2b">2</div><div class="body"><h3>Early Owls</h3><p>קפה כיפי.</p><a href="https://maps.app.goo.gl/mLQKeR8aayThNebv9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#8a5a2b">3</div><div class="body"><h3>The Moon Eatery</h3><p>ארוחות בוקר.</p><a href="https://maps.app.goo.gl/1xyMsS9nqCboaw7KA" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#8a5a2b">4</div><div class="body"><h3>Free Bird Cafe</h3><p>קפה וחנות יד שנייה. מגניב.</p><a href="https://maps.app.goo.gl/Ey6Mr8F21gPvZpk68" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#8a5a2b">5</div><div class="body"><h3>Chez Nous Wat Ket</h3><p>קפה ומאפייה טובים.</p><a href="https://maps.app.goo.gl/Gy7EgmBmC9SiG8vV6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#8a5a2b">6</div><div class="body"><h3>The Baristro Asian Style</h3><p>קפה מגניב. יש להם עוד סניפים על הנהר.</p><a href="https://maps.app.goo.gl/nGBcj9FhgKivqZ4B7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><section class="cat"><h2><span class="dot" style="background:#4f8a3a"></span>קפה בטבע ומחוץ לעיר <span class="count">10</span></h2><div class="items"><div class="place"><div class="num" style="background:#4f8a3a">7</div><div class="body"><h3>Wild Coffee &amp; Bistro</h3><p>קפה מהמם. טבע כזה.</p><a href="https://maps.app.goo.gl/fHnecntaZarK5n9k8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">8</div><div class="body"><h3>Fernpresso at Lake</h3><p>קפה מקסים על אגם.</p><a href="https://maps.app.goo.gl/w4nwaLLKQFPdVXJ86" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">9</div><div class="body"><h3>Chom Cafe and Restaurant</h3><p>קפה-מסעדה מתויר, מאוד יפה. אינסטגרמי.</p><a href="https://maps.app.goo.gl/x3bGWpzjSnNFuumW7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">10</div><div class="body"><h3>Valley Coffee By Lanna Resort</h3><p>ריזורט שיש בו קפה חמוד על הנחל.</p><a href="https://maps.app.goo.gl/K4QYyRCpScNnH82o6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">11</div><div class="body"><h3>Fleur Cafe &amp; Eatery</h3><p>מקום מהמם. אוכל מעולה.</p><a href="https://maps.app.goo.gl/sc8cKNcMDqp1B8BQ9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">12</div><div class="body"><h3>WTF Coffee Camp</h3><p>קפה מתויר. מיוחד. מפל.</p><a href="https://maps.app.goo.gl/syyvSGSC1ZCcCNPB8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">13</div><div class="body"><h3>Hli Chin Cafe</h3><p>בית קפה עם נוף מושלם באזור מון ג&#x27;אם.</p><a href="https://maps.app.goo.gl/sftdU4T7Ym9GHKjK8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">14</div><div class="body"><h3>CHOB Café</h3><p>קפה מקסים.</p><a href="https://maps.app.goo.gl/qtZHeGyYudcMmtHH8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">15</div><div class="body"><h3>Skugga Estate</h3><p>קפה בחווה מקסימה. יש גם שוקולד ויין שהם מייצרים, ואוכל טוב.</p><a href="https://maps.app.goo.gl/u8otsk8isoxQzCKp9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#4f8a3a">16</div><div class="body"><h3>Teddu Coffee &amp; Inn</h3><p>בית קפה נחמד בטבע, בכפר מה קמפונג.</p><a href="https://maps.app.goo.gl/7BcnLCy5RfVkgDJH8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><section class="cat"><h2><span class="dot" style="background:#c2531f"></span>מסעדות <span class="count">17</span></h2><div class="items"><div class="place"><div class="num" style="background:#c2531f">17</div><div class="body"><h3>Khao-Sō-i</h3><p>קאו סוי. חובה.</p><a href="https://maps.app.goo.gl/5MScX5EPg75z7HWX8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">18</div><div class="body"><h3>Salsa Kitchen</h3><p>מקסיקנית טובה, מנות גדולות.</p><a href="https://maps.app.goo.gl/CQffvsgepuyUtsBVA" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">19</div><div class="body"><h3>SHINE ON</h3><p>מסעדה ים-תיכונית של ישראלים. חמוד.</p><a href="https://maps.app.goo.gl/mDA5ENCj3xmtbNxW6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">20</div><div class="body"><h3>Ohkajhu (האורגנית) · נים סיטי</h3><p>האורגנית, סניף 1.</p><a href="https://maps.app.goo.gl/Fj8bAWhnADriVDqe6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">21</div><div class="body"><h3>Ohkajhu (האורגנית) · החווה בסן סאי</h3><p>האורגנית, סניף 2.</p><a href="https://maps.app.goo.gl/PuiFX3VAEYBugHEu7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">22</div><div class="body"><h3>SHAYOTE Farm to Table</h3><p>משלמים כפי יכולתך.</p><a href="https://maps.app.goo.gl/vB3ivLHRdGXUCKAZA" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">23</div><div class="body"><h3>KOBQ</h3><p>מסעדה קוריאנית שאהבנו. משתלם וטעים.</p><a href="https://maps.app.goo.gl/Pzory26xTA2CBwyo7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">24</div><div class="body"><h3>Shabugu</h3><p>מעולה. טעים, זול ומהיר. יש מלא סניפים.</p><a href="https://maps.app.goo.gl/X2st6vKpwnYQAW6Y6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">25</div><div class="body"><h3>The Duke&#x27;s · על הנהר</h3><p>יש כמה סניפים. אוכל טוב ולא יקר.</p><a href="https://maps.app.goo.gl/F7ys8KsuUhU8o2Rm6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">26</div><div class="body"><h3>The Duke&#x27;s · קניון סנטרל איירפורט</h3><p>עוד סניף. אוכל טוב ולא יקר.</p><a href="https://maps.app.goo.gl/ri9Hco5a4P1qFqa17" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">27</div><div class="body"><h3>Burger x Burger</h3><p>המבורגר טוב.</p><a href="https://maps.app.goo.gl/N7srz5c1g44Pj8nEA" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">28</div><div class="body"><h3>Coconuts N Cocktails</h3><p>הודית טובה ליד שוק הלילה.</p><a href="https://maps.app.goo.gl/7bCQs9FN6FYy9HSt7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">29</div><div class="body"><h3>Ksushi</h3><p>סושי בעיר העתיקה.</p><a href="https://maps.app.goo.gl/PYpcvNfztvgCJQXb6" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">30</div><div class="body"><h3>NORI Sky Terrace</h3><p>סושי נחמד למעלה על הגג.</p><a href="https://maps.app.goo.gl/a1AfLaTCkkAJDd8c9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">31</div><div class="body"><h3>SABI SABI</h3><p>סושי עם הצגה על הבר. יקר.</p><a href="https://maps.app.goo.gl/exUp1zeusthpikd17" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">32</div><div class="body"><h3>Cho Hand Rolled Sushi</h3><p>מסעדת סושי מיוחדת, יקרה, בקניון. שווה.</p><a href="https://maps.app.goo.gl/XnaEBkzmPWbEdVhF7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c2531f">33</div><div class="body"><h3>Wagaya Yakiniku</h3><p>יקיניקו יפני. הכל כלול.</p><a href="https://maps.app.goo.gl/USBECVmsxiopyRmG9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><section class="cat"><h2><span class="dot" style="background:#6a4bb0"></span>ברים <span class="count">4</span></h2><div class="items"><div class="place"><div class="num" style="background:#6a4bb0">34</div><div class="body"><h3>Meilleur Wine Coffee</h3><p>בר יין חמוד בעיר העתיקה.</p><a href="https://maps.app.goo.gl/zMubDgn4cG7W1pMH9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#6a4bb0">35</div><div class="body"><h3>CRU 2nd floor wine bar</h3><p>בר יין חמוד בעיר העתיקה.</p><a href="https://maps.app.goo.gl/TwrPYewcdN52V25u8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#6a4bb0">36</div><div class="body"><h3>MAI The Sky Bar</h3><p>בר על הגג.</p><a href="https://maps.app.goo.gl/uv9VTPhdFWYPX2A97" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#6a4bb0">37</div><div class="body"><h3>HONG&#x27;s Sky Bar</h3><p>בר על הגג.</p><a href="https://maps.app.goo.gl/XFwJUfLx4PPSX4S78" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><section class="cat"><h2><span class="dot" style="background:#c08a12"></span>שווקים <span class="count">6</span></h2><div class="items"><div class="place"><div class="num" style="background:#c08a12">38</div><div class="body"><h3>Jing Jai Market</h3><p>שוק חובה. בסופ&quot;ש הכי שווה, דוכני אוכל מעולים. חגיגה.</p><a href="https://maps.app.goo.gl/K3iqBzFtwdNm2cwm7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c08a12">39</div><div class="body"><h3>Baan Kang Wat</h3><p>יריד האומנים. מהמם. חובה.</p><a href="https://maps.app.goo.gl/Cp4D67CQGKrJSTpp7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c08a12">40</div><div class="body"><h3>Coconut Market</h3><p>שוק סופ&quot;ש מהמם ממש.</p><a href="https://maps.app.goo.gl/rstuGfcEFDnGfdXu7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c08a12">41</div><div class="body"><h3>שוק הלילה של יום ראשון</h3><p>שוק הלילה של ראשון, בעיר העתיקה.</p><a href="https://maps.app.goo.gl/uQjGnWPrFmPGfZRZ9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c08a12">42</div><div class="body"><h3>שוק הלילה של שבת</h3><p>שוק לילה של שבת בערב.</p><a href="https://maps.app.goo.gl/p8JMHXx2DcWGSgXL9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#c08a12">43</div><div class="body"><h3>White Market</h3><p>שוק מגניב, בעיקר בשבת בערב.</p><a href="https://maps.app.goo.gl/EXK7ayfzevnmogpZ7" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><section class="cat"><h2><span class="dot" style="background:#1f7a74"></span>טבע, טיולים ואזורים <span class="count">6</span></h2><div class="items"><div class="place"><div class="num" style="background:#1f7a74">44</div><div class="body"><h3>Mae Kampong · כפר מה קמפונג</h3><p>אזור מושלם, חובה להגיע.</p><a href="https://maps.app.goo.gl/QXKT4z2CWvzuv1c37" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#1f7a74">45</div><div class="body"><h3>Mon Jam · מון ג&#x27;אם</h3><p>אזור מהמם. חובה להגיע.</p><a href="https://maps.app.goo.gl/KLZPKBA7opnpsD598" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#1f7a74">46</div><div class="body"><h3>Monk&#x27;s Trail · שביל הנזירים</h3><p>אזור מהמם לטיולים רגליים. יש שם כל מיני מסלולים.</p><a href="https://maps.app.goo.gl/Nn4Lm2yX68tSLFr96" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#1f7a74">47</div><div class="body"><h3>Huay Kaew Waterfall</h3><p>מפל יפה. מסלול קצר, קרוב מאוד לעיר. שווה.</p><a href="https://maps.app.goo.gl/Sh35Ras719r7qZAT8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#1f7a74">48</div><div class="body"><h3>Royal Pavilion · ראצ&#x27;פרוק</h3><p>גנים מהממים ממש.</p><a href="https://maps.app.goo.gl/tiuEk47U7K5gYW7Z9" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div><div class="place"><div class="num" style="background:#1f7a74">49</div><div class="body"><h3>Dantewada</h3><p>מתויר. אנשים מתלהבים ממנו.</p><a href="https://maps.app.goo.gl/tNGzyUx6mjqSxQxZ8" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div></div></section><!--/L--></div>
+    <footer>Hadar · נובמבר 2026</footer>
+  </aside>
+  <div id="map" dir="ltr" role="region" aria-label="מפה"></div>
+</div>
+<div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastBtn" type="button" hidden></button></div>
+
+<script id="places-data" type="application/json">[{"name": "Fern Forest Cafe", "cat": "cafe", "lat": 18.7933635, "lng": 98.982022, "note": "קפה חביב בעיר העתיקה. ארוחות בוקר.", "url": "https://maps.app.goo.gl/Z4nQ5zCY7gdY5S3y6", "id": "p1", "star": false}, {"name": "Early Owls", "cat": "cafe", "lat": 18.8058614, "lng": 98.9890292, "note": "קפה כיפי.", "url": "https://maps.app.goo.gl/mLQKeR8aayThNebv9", "id": "p2", "star": false}, {"name": "The Moon Eatery", "cat": "cafe", "lat": 18.7977257, "lng": 98.9749577, "note": "ארוחות בוקר.", "url": "https://maps.app.goo.gl/1xyMsS9nqCboaw7KA", "id": "p3", "star": false}, {"name": "Free Bird Cafe", "cat": "cafe", "lat": 18.7941165, "lng": 98.9722237, "note": "קפה וחנות יד שנייה. מגניב.", "url": "https://maps.app.goo.gl/Ey6Mr8F21gPvZpk68", "id": "p4", "star": false}, {"name": "Chez Nous Wat Ket", "cat": "cafe", "lat": 18.792092, "lng": 99.0037018, "note": "קפה ומאפייה טובים.", "url": "https://maps.app.goo.gl/Gy7EgmBmC9SiG8vV6", "id": "p5", "star": false}, {"name": "The Baristro Asian Style", "cat": "cafe", "lat": 18.7899479, "lng": 98.9516702, "note": "קפה מגניב. יש להם עוד סניפים על הנהר.", "url": "https://maps.app.goo.gl/nGBcj9FhgKivqZ4B7", "id": "p6", "star": false}, {"name": "Wild Coffee & Bistro", "cat": "nature_cafe", "lat": 18.821937, "lng": 98.9488791, "note": "קפה מהמם. טבע כזה.", "url": "https://maps.app.goo.gl/fHnecntaZarK5n9k8", "id": "p7", "star": false}, {"name": "Fernpresso at Lake", "cat": "nature_cafe", "lat": 18.7615467, "lng": 98.9349448, "note": "קפה מקסים על אגם.", "url": "https://maps.app.goo.gl/w4nwaLLKQFPdVXJ86", "id": "p8", "star": false}, {"name": "Chom Cafe and Restaurant", "cat": "nature_cafe", "lat": 18.7484954, "lng": 98.9455152, "note": "קפה-מסעדה מתויר, מאוד יפה. אינסטגרמי.", "url": "https://maps.app.goo.gl/x3bGWpzjSnNFuumW7", "id": "p9", "star": false}, {"name": "Valley Coffee By Lanna Resort", "cat": "nature_cafe", "lat": 18.7576585, "lng": 98.8804627, "note": "ריזורט שיש בו קפה חמוד על הנחל.", "url": "https://maps.app.goo.gl/K4QYyRCpScNnH82o6", "id": "p10", "star": false}, {"name": "Fleur Cafe & Eatery", "cat": "nature_cafe", "lat": 18.907089, "lng": 98.9072429, "note": "מקום מהמם. אוכל מעולה.", "url": "https://maps.app.goo.gl/sc8cKNcMDqp1B8BQ9", "id": "p11", "star": false}, {"name": "WTF Coffee Camp", "cat": "nature_cafe", "lat": 18.8734381, "lng": 98.8131681, "note": "קפה מתויר. מיוחד. מפל.", "url": "https://maps.app.goo.gl/syyvSGSC1ZCcCNPB8", "id": "p12", "star": false}, {"name": "Hli Chin Cafe", "cat": "nature_cafe", "lat": 18.9416964, "lng": 98.8026718, "note": "בית קפה עם נוף מושלם באזור מון ג'אם.", "url": "https://maps.app.goo.gl/sftdU4T7Ym9GHKjK8", "id": "p13", "star": false}, {"name": "CHOB Café", "cat": "nature_cafe", "lat": 18.8872876, "lng": 99.0119376, "note": "קפה מקסים.", "url": "https://maps.app.goo.gl/qtZHeGyYudcMmtHH8", "id": "p14", "star": false}, {"name": "Skugga Estate", "cat": "nature_cafe", "lat": 18.7803474, "lng": 99.2421828, "note": "קפה בחווה מקסימה. יש גם שוקולד ויין שהם מייצרים, ואוכל טוב.", "url": "https://maps.app.goo.gl/u8otsk8isoxQzCKp9", "id": "p15", "star": false}, {"name": "Teddu Coffee & Inn", "cat": "nature_cafe", "lat": 18.8656082, "lng": 99.3473739, "note": "בית קפה נחמד בטבע, בכפר מה קמפונג.", "url": "https://maps.app.goo.gl/7BcnLCy5RfVkgDJH8", "id": "p16", "star": false}, {"name": "Khao-Sō-i", "cat": "food", "lat": 18.8091471, "lng": 99.0047617, "note": "קאו סוי. חובה.", "url": "https://maps.app.goo.gl/5MScX5EPg75z7HWX8", "id": "p17", "star": false}, {"name": "Salsa Kitchen", "cat": "food", "lat": 18.7981431, "lng": 98.9740941, "note": "מקסיקנית טובה, מנות גדולות.", "url": "https://maps.app.goo.gl/CQffvsgepuyUtsBVA", "id": "p18", "star": false}, {"name": "SHINE ON", "cat": "food", "lat": 18.7974403, "lng": 98.9758675, "note": "מסעדה ים-תיכונית של ישראלים. חמוד.", "url": "https://maps.app.goo.gl/mDA5ENCj3xmtbNxW6", "id": "p19", "star": false}, {"name": "Ohkajhu (האורגנית) · נים סיטי", "cat": "food", "lat": 18.772454, "lng": 98.9783037, "note": "האורגנית, סניף 1.", "url": "https://maps.app.goo.gl/Fj8bAWhnADriVDqe6", "id": "p20", "star": false}, {"name": "Ohkajhu (האורגנית) · החווה בסן סאי", "cat": "food", "lat": 18.8405488, "lng": 99.0246445, "note": "האורגנית, סניף 2.", "url": "https://maps.app.goo.gl/PuiFX3VAEYBugHEu7", "id": "p21", "star": false}, {"name": "SHAYOTE Farm to Table", "cat": "food", "lat": 18.7666733, "lng": 98.9753141, "note": "משלמים כפי יכולתך.", "url": "https://maps.app.goo.gl/vB3ivLHRdGXUCKAZA", "id": "p22", "star": false}, {"name": "KOBQ", "cat": "food", "lat": 18.7838353, "lng": 99.028857, "note": "מסעדה קוריאנית שאהבנו. משתלם וטעים.", "url": "https://maps.app.goo.gl/Pzory26xTA2CBwyo7", "id": "p23", "star": false}, {"name": "Shabugu", "cat": "food", "lat": 18.771277, "lng": 98.9764741, "note": "מעולה. טעים, זול ומהיר. יש מלא סניפים.", "url": "https://maps.app.goo.gl/X2st6vKpwnYQAW6Y6", "id": "p24", "star": false}, {"name": "The Duke's · על הנהר", "cat": "food", "lat": 18.785107, "lng": 99.005124, "note": "יש כמה סניפים. אוכל טוב ולא יקר.", "url": "https://maps.app.goo.gl/F7ys8KsuUhU8o2Rm6", "id": "p25", "star": false}, {"name": "The Duke's · קניון סנטרל איירפורט", "cat": "food", "lat": 18.7690863, "lng": 98.9748336, "note": "עוד סניף. אוכל טוב ולא יקר.", "url": "https://maps.app.goo.gl/ri9Hco5a4P1qFqa17", "id": "p26", "star": false}, {"name": "Burger x Burger", "cat": "food", "lat": 18.7848803, "lng": 98.9933875, "note": "המבורגר טוב.", "url": "https://maps.app.goo.gl/N7srz5c1g44Pj8nEA", "id": "p27", "star": false}, {"name": "Coconuts N Cocktails", "cat": "food", "lat": 18.7842587, "lng": 99.0005029, "note": "הודית טובה ליד שוק הלילה.", "url": "https://maps.app.goo.gl/7bCQs9FN6FYy9HSt7", "id": "p28", "star": false}, {"name": "Ksushi", "cat": "food", "lat": 18.7950966, "lng": 98.9822328, "note": "סושי בעיר העתיקה.", "url": "https://maps.app.goo.gl/PYpcvNfztvgCJQXb6", "id": "p29", "star": false}, {"name": "NORI Sky Terrace", "cat": "food", "lat": 18.7986431, "lng": 98.9687105, "note": "סושי נחמד למעלה על הגג.", "url": "https://maps.app.goo.gl/a1AfLaTCkkAJDd8c9", "id": "p30", "star": false}, {"name": "SABI SABI", "cat": "food", "lat": 18.7982781, "lng": 98.9705116, "note": "סושי עם הצגה על הבר. יקר.", "url": "https://maps.app.goo.gl/exUp1zeusthpikd17", "id": "p31", "star": false}, {"name": "Cho Hand Rolled Sushi", "cat": "food", "lat": 18.8065341, "lng": 99.0178559, "note": "מסעדת סושי מיוחדת, יקרה, בקניון. שווה.", "url": "https://maps.app.goo.gl/XnaEBkzmPWbEdVhF7", "id": "p32", "star": false}, {"name": "Wagaya Yakiniku", "cat": "food", "lat": 18.7643762, "lng": 98.9985229, "note": "יקיניקו יפני. הכל כלול.", "url": "https://maps.app.goo.gl/USBECVmsxiopyRmG9", "id": "p33", "star": false}, {"name": "Meilleur Wine Coffee", "cat": "bar", "lat": 18.7852258, "lng": 98.9920923, "note": "בר יין חמוד בעיר העתיקה.", "url": "https://maps.app.goo.gl/zMubDgn4cG7W1pMH9", "id": "p34", "star": false}, {"name": "CRU 2nd floor wine bar", "cat": "bar", "lat": 18.7865194, "lng": 98.982125, "note": "בר יין חמוד בעיר העתיקה.", "url": "https://maps.app.goo.gl/TwrPYewcdN52V25u8", "id": "p35", "star": false}, {"name": "MAI The Sky Bar", "cat": "bar", "lat": 18.7852702, "lng": 99.0026149, "note": "בר על הגג.", "url": "https://maps.app.goo.gl/uv9VTPhdFWYPX2A97", "id": "p36", "star": false}, {"name": "HONG's Sky Bar", "cat": "bar", "lat": 18.7829788, "lng": 98.9980062, "note": "בר על הגג.", "url": "https://maps.app.goo.gl/XFwJUfLx4PPSX4S78", "id": "p37", "star": false}, {"name": "Jing Jai Market", "cat": "market", "lat": 18.806253, "lng": 98.9953026, "note": "שוק חובה. בסופ\"ש הכי שווה, דוכני אוכל מעולים. חגיגה.", "url": "https://maps.app.goo.gl/K3iqBzFtwdNm2cwm7", "id": "p38", "star": false}, {"name": "Baan Kang Wat", "cat": "market", "lat": 18.7761906, "lng": 98.9483622, "note": "יריד האומנים. מהמם. חובה.", "url": "https://maps.app.goo.gl/Cp4D67CQGKrJSTpp7", "id": "p39", "star": false}, {"name": "Coconut Market", "cat": "market", "lat": 18.8177712, "lng": 99.0101074, "note": "שוק סופ\"ש מהמם ממש.", "url": "https://maps.app.goo.gl/rstuGfcEFDnGfdXu7", "id": "p40", "star": false}, {"name": "שוק הלילה של יום ראשון", "cat": "market", "lat": 18.78818, "lng": 98.9881002, "note": "שוק הלילה של ראשון, בעיר העתיקה.", "url": "https://maps.app.goo.gl/uQjGnWPrFmPGfZRZ9", "id": "p41", "star": false}, {"name": "שוק הלילה של שבת", "cat": "market", "lat": 18.7810913, "lng": 98.9881137, "note": "שוק לילה של שבת בערב.", "url": "https://maps.app.goo.gl/p8JMHXx2DcWGSgXL9", "id": "p42", "star": false}, {"name": "White Market", "cat": "market", "lat": 18.7997598, "lng": 98.9674352, "note": "שוק מגניב, בעיקר בשבת בערב.", "url": "https://maps.app.goo.gl/EXK7ayfzevnmogpZ7", "id": "p43", "star": false}, {"name": "Mae Kampong · כפר מה קמפונג", "cat": "nature", "lat": 18.8655073, "lng": 99.3509846, "note": "אזור מושלם, חובה להגיע.", "url": "https://maps.app.goo.gl/QXKT4z2CWvzuv1c37", "id": "p44", "star": false}, {"name": "Mon Jam · מון ג'אם", "cat": "nature", "lat": 18.9357695, "lng": 98.8224201, "note": "אזור מהמם. חובה להגיע.", "url": "https://maps.app.goo.gl/KLZPKBA7opnpsD598", "id": "p45", "star": false}, {"name": "Monk's Trail · שביל הנזירים", "cat": "nature", "lat": 18.79632, "lng": 98.94347, "note": "אזור מהמם לטיולים רגליים. יש שם כל מיני מסלולים.", "url": "https://maps.app.goo.gl/Nn4Lm2yX68tSLFr96", "id": "p46", "star": false}, {"name": "Huay Kaew Waterfall", "cat": "nature", "lat": 18.8118467, "lng": 98.9445458, "note": "מפל יפה. מסלול קצר, קרוב מאוד לעיר. שווה.", "url": "https://maps.app.goo.gl/Sh35Ras719r7qZAT8", "id": "p47", "star": false}, {"name": "Royal Pavilion · ראצ'פרוק", "cat": "nature", "lat": 18.7529249, "lng": 98.9224052, "note": "גנים מהממים ממש.", "url": "https://maps.app.goo.gl/tiuEk47U7K5gYW7Z9", "id": "p48", "star": false}, {"name": "Dantewada", "cat": "nature", "lat": 19.1232017, "lng": 98.9420572, "note": "מתויר. אנשים מתלהבים ממנו.", "url": "https://maps.app.goo.gl/tNGzyUx6mjqSxQxZ8", "id": "p49", "star": false}]</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+// Snapshot of this file as written, used by "save a copy" before anything changes the page
+const SOURCE = "<!doctype html>\n" + document.documentElement.outerHTML;
+
+const CATS = {
+  cafe:        { label: "בתי קפה בעיר", color: "--cat-cafe" },
+  nature_cafe: { label: "קפה בטבע ומחוץ לעיר", color: "--cat-naturecafe" },
+  food:        { label: "מסעדות", color: "--cat-food" },
+  bar:         { label: "ברים", color: "--cat-bar" },
+  market:      { label: "שווקים", color: "--cat-market" },
+  nature:      { label: "טבע, טיולים ואזורים", color: "--cat-nature" }
+};
+const RAW = document.getElementById("places-data").textContent;
+const ORIGINAL = JSON.parse(RAW);
+
+// ---- storage: per browser, tied to the exact list this file was shipped with ----
+function hash(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+const BASE = hash(RAW);
+const KEY = "keren-cm-places";
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.base === BASE && Array.isArray(s.items)) return s.items; } catch (e) {}
+  return structuredClone(ORIGINAL);
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ base: BASE, items })); } catch (e) {} }
+let items = load();
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const byId = id => items.find(p => p.id === id);
+
+// ---- map ----
+const map = L.map("map");
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 19, attribution: "Tiles &copy; Esri"
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let markers = {};
+
+// my location
+let meMarker = null, meCircle = null, watchId = null, firstFix = false;
+const Locate = L.Control.extend({
+  options: { position: "topleft" },
+  onAdd() {
+    const wrap = L.DomUtil.create("div", "leaflet-bar");
+    const b = L.DomUtil.create("button", "locate", wrap);
+    b.type = "button"; b.title = "המיקום שלי"; b.setAttribute("aria-label", "המיקום שלי");
+    b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>';
+    L.DomEvent.disableClickPropagation(wrap);
+    b.addEventListener("click", () => toggleLocate(b));
+    return wrap;
+  }
+});
+map.addControl(new Locate());
+function toggleLocate(b) {
+  if (watchId !== null) {
+    if (meMarker) { map.setView(meMarker.getLatLng(), Math.max(map.getZoom(), 14)); }
+    return;
+  }
+  if (!navigator.geolocation) { toast("הדפדפן הזה לא תומך במיקום."); return; }
+  firstFix = false; b.classList.add("on");
+  watchId = navigator.geolocation.watchPosition(pos => {
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    if (!meMarker) {
+      meMarker = L.marker(ll, { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000, interactive: false }).addTo(map);
+      meCircle = L.circle(ll, { radius: pos.coords.accuracy, color: "#1a73e8", weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
+    } else { meMarker.setLatLng(ll); meCircle.setLatLng(ll).setRadius(pos.coords.accuracy); }
+    if (!firstFix) { firstFix = true; map.setView(ll, Math.max(map.getZoom(), 14)); }
+  }, err => {
+    b.classList.remove("on"); navigator.geolocation.clearWatch(watchId); watchId = null;
+    toast(err.code === 1 ? "צריך לאשר לדפדפן גישה למיקום ואז ללחוץ שוב." : "לא הצלחתי למצוא את המיקום. אפשר לנסות שוב.");
+  }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 });
+}
+
+// ---- state ----
+let filter = "all";
+let editing = false;
+let numbers = {};
+
+function ordered() { // category order, then list order
+  return Object.keys(CATS).flatMap(c => items.filter(p => p.cat === c));
+}
+function visible() {
+  return ordered().filter(p => filter === "all" || (filter === "star" ? p.star : p.cat === filter));
+}
+
+function renderMarkers() {
+  layer.clearLayers(); markers = {};
+  visible().forEach(p => {
+    const icon = L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28],
+      html: `<div class="pin${p.star ? " starred" : ""}" style="background:${css(CATS[p.cat].color)}"><span>${numbers[p.id]}</span></div>` });
+    const m = L.marker([p.lat, p.lng], { icon, zIndexOffset: p.star ? 500 : 0 }).addTo(layer)
+      .bindPopup(`<b>${p.star ? "★ " : ""}${esc(p.name)}</b><br>${esc(p.note).replace(/\n/g, "<br>")}<br><a href="${esc(p.url)}" target="_blank" rel="noopener">פתיחה בגוגל מפות</a>`);
+    m.on("click", () => highlight(p.id, false));
+    markers[p.id] = m;
+  });
+}
+
+function renderChips() {
+  const stars = items.filter(p => p.star).length;
+  const chip = (key, label, color) =>
+    `<button class="chip" type="button" data-f="${key}" aria-pressed="${filter === key}">${color ? `<span class="dot" style="background:${css(color)}"></span>` : ""}${label}</button>`;
+  document.getElementById("chips").innerHTML = editing ? "" :
+    chip("all", `הכל (${items.length})`) +
+    (stars ? chip("star", `<span class="s">★</span> מסומנים (${stars})`) : "") +
+    Object.keys(CATS).filter(c => items.some(p => p.cat === c)).map(c => chip(c, CATS[c].label, CATS[c].color)).join("");
+}
+
+const catOptions = (exclude) => Object.keys(CATS).filter(c => c !== exclude).map(c => `<option value="${c}">${CATS[c].label}</option>`).join("");
+
+function placeHTML(p, col) {
+  const star = `<button class="icon star${p.star ? " on" : ""}" type="button" data-act="star" aria-pressed="${p.star}" aria-label="סימון בכוכב">${p.star ? "★" : "☆"}</button>`;
+  if (!editing) {
+    return `<div class="place" tabindex="0" data-id="${p.id}">
+      <div class="num" style="background:${col}">${numbers[p.id]}</div>
+      <div class="body"><h3>${esc(p.name)}</h3><p>${esc(p.note)}</p><a href="${esc(p.url)}" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div>
+      ${star}</div>`;
+  }
+  return `<div class="place" data-id="${p.id}">
+    <div class="handle" aria-label="גרירה">⋮⋮</div>
+    <div class="num" style="background:${col}">${numbers[p.id]}</div>
+    <div class="body">
+      <input class="field name" id="name-${p.id}" data-field="name" value="${esc(p.name)}" aria-label="שם המקום">
+      <textarea class="field" id="note-${p.id}" data-field="note" rows="2" aria-label="הערה" placeholder="הערות...">${esc(p.note)}</textarea>
+      <div class="actions">
+        <select id="move-${p.id}" data-act="move" aria-label="העברה לתחום אחר"><option value="">העברה ל...</option>${catOptions(p.cat)}</select>
+        <select id="dup-${p.id}" data-act="dup" aria-label="שכפול לתחום נוסף"><option value="">שכפול ל...</option>${catOptions(p.cat)}</select>
+      </div>
+    </div>
+    ${star}</div>`;
+}
+
+let sortables = [];
+function renderList() {
+  sortables.forEach(s => s.destroy()); sortables = [];
+  const list = document.getElementById("list");
+  list.classList.toggle("editing", editing);
+  const vis = new Set(visible().map(p => p.id));
+  list.innerHTML = Object.keys(CATS).map(c => {
+    const inCat = items.filter(p => p.cat === c && vis.has(p.id));
+    if (!inCat.length && !editing) return "";
+    const col = css(CATS[c].color);
+    return `<section class="cat"><h2><span class="dot" style="background:${col}"></span>${CATS[c].label} <span class="count">${inCat.length}</span></h2>
+      <div class="items" data-cat="${c}">${inCat.map(p => placeHTML(p, col)).join("")}</div></section>`;
+  }).join("") || `<p style="color:var(--muted)">אין מקומות להצגה.</p>`;
+  if (editing && window.Sortable) {
+    list.querySelectorAll(".items").forEach(el => sortables.push(Sortable.create(el, {
+      group: "places", handle: ".handle", animation: 150, onEnd: syncOrderFromDOM
+    })));
+  }
+}
+
+function syncOrderFromDOM() {
+  const next = [];
+  document.querySelectorAll("#list .items").forEach(box => {
+    box.querySelectorAll(".place").forEach(el => { const p = byId(el.dataset.id); p.cat = box.dataset.cat; next.push(p); });
+  });
+  items = next; commit();
+}
+
+function computeNumbers() { numbers = {}; ordered().forEach((p, i) => numbers[p.id] = i + 1); }
+
+function render(fit) {
+  map.invalidateSize();
+  computeNumbers(); renderChips(); renderList(); renderMarkers();
+  if (fit) { const pts = visible().map(p => [p.lat, p.lng]); map.invalidateSize(); if (pts.length) map.fitBounds(pts, { padding: [50, 50], maxZoom: 15 }); }
+}
+function commit(fit) { save(); render(fit); }
+
+function highlight(id, pan) {
+  document.querySelectorAll(".place.active").forEach(e => e.classList.remove("active"));
+  const el = document.querySelector(`.place[data-id="${id}"]`);
+  if (el) { el.classList.add("active"); if (!pan) el.scrollIntoView({ block: "nearest", behavior: "smooth" }); }
+  if (pan && markers[id]) {
+    const p = byId(id);
+    map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: .6 });
+    markers[id].openPopup();
+  }
+}
+
+// ---- toast with optional undo ----
+let toastTimer;
+function toast(msg, actionLabel, action) {
+  const t = document.getElementById("toast"), b = document.getElementById("toastBtn");
+  document.getElementById("toastMsg").textContent = msg;
+  b.hidden = !actionLabel; b.textContent = actionLabel || "";
+  b.onclick = () => { t.hidden = true; action && action(); };
+  t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 6000);
+}
+
+// ---- events ----
+document.getElementById("chips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return; filter = b.dataset.f; render(true);
+});
+const listEl = document.getElementById("list");
+listEl.addEventListener("click", e => {
+  const el = e.target.closest(".place"); if (!el) return;
+  const p = byId(el.dataset.id);
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "star") { p.star = !p.star; if (filter === "star" && !items.some(x => x.star)) filter = "all"; commit(); return; }
+  if (editing || e.target.closest("a")) return;
+  highlight(p.id, true);
+});
+listEl.addEventListener("keydown", e => {
+  const el = e.target.closest(".place");
+  if (!editing && el && e.target === el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); highlight(el.dataset.id, true); }
+});
+listEl.addEventListener("change", e => {
+  const el = e.target.closest(".place"); if (!el) return;
+  const p = byId(el.dataset.id), act = e.target.dataset.act, cat = e.target.value;
+  if (act === "move" && cat) {
+    items.splice(items.indexOf(p), 1); p.cat = cat; items.push(p); commit();
+    toast(`הועבר ל"${CATS[cat].label}"`);
+  } else if (act === "dup" && cat) {
+    const copy = { ...p, id: "p" + Date.now().toString(36), cat }; items.push(copy); commit();
+    toast(`שוכפל ל"${CATS[cat].label}"`);
+  } else if (e.target.dataset.field) { renderMarkers(); }
+});
+let saveTimer;
+listEl.addEventListener("input", e => {
+  const f = e.target.dataset.field; if (!f) return;
+  byId(e.target.closest(".place").dataset.id)[f] = e.target.value;
+  clearTimeout(saveTimer); saveTimer = setTimeout(save, 300);
+});
+
+document.getElementById("editBtn").addEventListener("click", () => {
+  editing = !editing; filter = "all";
+  document.getElementById("editBtn").classList.toggle("on", editing);
+  document.getElementById("editBtn").textContent = editing ? "סיום עריכה" : "עריכת הרשימה";
+  document.getElementById("editbar").hidden = !editing;
+  document.querySelector(".app").classList.toggle("editing-mode", editing);
+  render(true);
+});
+
+let resetArmed = false;
+document.getElementById("resetBtn").addEventListener("click", e => {
+  const b = e.currentTarget;
+  if (!resetArmed) { resetArmed = true; b.classList.add("danger"); b.textContent = "בטוח? לחיצה נוספת תמחק את כל השינויים";
+    setTimeout(() => { resetArmed = false; b.classList.remove("danger"); b.textContent = "חזרה לרשימה המקורית"; }, 4000); return; }
+  resetArmed = false; b.classList.remove("danger"); b.textContent = "חזרה לרשימה המקורית";
+  items = structuredClone(ORIGINAL); commit(true); toast("הרשימה חזרה למקור");
+});
+
+function staticList() { // plain list for viewers that do not run scripts
+  let n = 0;
+  return Object.keys(CATS).map(c => {
+    const inCat = items.filter(p => p.cat === c); if (!inCat.length) return "";
+    const col = css(CATS[c].color);
+    return `<section class="cat"><h2><span class="dot" style="background:${col}"></span>${CATS[c].label} <span class="count">${inCat.length}</span></h2><div class="items">` +
+      inCat.map(p => `<div class="place"><div class="num" style="background:${col}">${++n}</div><div class="body"><h3>${p.star ? "★ " : ""}${esc(p.name)}</h3><p>${esc(p.note)}</p><a href="${esc(p.url)}" target="_blank" rel="noopener">פתיחה בגוגל מפות ↗</a></div></div>`).join("") +
+      `</div></section>`;
+  }).join("");
+}
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const data = JSON.stringify(items).replace(/</g, "\\u003c");
+  const html = SOURCE.replace(/(<script id="places-data" type="application\/json">)[\s\S]*?(<\/script>)/, (m, a, b) => a + data + b);
+  const html2 = html.replace(/<!--L-->[\s\S]*?<!--\/L-->/, () => "<!--L-->" + staticList() + "<!--/L-->");
+  const blob = new Blob([html2], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "chiang-mai-keren.html";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("נשמר עותק עם כל השינויים. אפשר לשלוח אותו.");
+});
+
+render(true);
+</script>
+</body>
+</html>
